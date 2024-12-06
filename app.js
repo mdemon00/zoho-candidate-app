@@ -3,6 +3,11 @@ const fetch = require('node-fetch'); // Use node-fetch to make HTTP requests
 const cors = require('cors'); // Import the CORS package
 const app = express();
 const port = 3000;
+const FormData = require('form-data');
+const multer = require('multer');
+// Set up multer to handle the file upload
+const storage = multer.memoryStorage(); // Use memory storage for simplicity
+const upload = multer({ storage: storage });
 
 // Use CORS middleware to allow requests from any origin
 app.use(cors());
@@ -163,6 +168,69 @@ async function createZohoCandidate(candidateData) {
     throw error;
   }
 }
+
+// Function to upload the photo to Zoho Recruit
+async function uploadCandidatePhotoToZoho(candidateId, photoBlob) {
+  const url = `https://recruit.zoho.com/recruit/v2/Candidates/${candidateId}/photo`;
+
+  // If there is no access token, refresh it
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  // Create a FormData object and append the file
+  const formData = new FormData();
+  formData.append('file', photoBlob, 'candidate_photo.jpeg');  // Correct file format expected by Zoho
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+  };
+
+  try {
+    // Send the photo upload request to Zoho Recruit
+    const photoResponse = await fetch(url, {
+      method: 'POST',
+      headers: headers,  // Note that we are not sending Content-Type because it's handled by FormData
+      body: formData,    // Send the FormData object directly as the body
+    });
+
+    if (!photoResponse.ok) {
+      const errorData = await photoResponse.json();
+      console.error('Error uploading photo:', errorData);
+      throw new Error(`Photo upload failed: ${errorData.message}`);
+    }
+
+    const photoData = await photoResponse.json();
+    console.log('Photo upload successful:', photoData);
+    return photoData;
+
+  } catch (error) {
+    console.error('Error in uploadCandidatePhotoToZoho:', error.message);
+    throw error;
+  }
+}
+
+// Endpoint to receive photo and candidateId from the client
+// Use 'upload.single' to handle a single file upload with the field name 'file'
+app.post('/upload-photo', upload.single('file'), async (req, res) => {
+  const { candidateId } = req.body;  // Candidate ID comes from form data (not JSON)
+  const photoBlob = req.file.buffer; // The uploaded file will be stored in req.file.buffer by multer
+
+  if (!candidateId || !photoBlob) {
+    return res.status(400).json({ error: 'Candidate ID and photo file are required.' });
+  }
+
+  try {
+    // Upload the photo to Zoho Recruit
+    const uploadResponse = await uploadCandidatePhotoToZoho(candidateId, photoBlob);
+    res.json({ success: true, message: 'Photo uploaded successfully.', data: uploadResponse });
+
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to upload photo.', details: error.message });
+  }
+});
+
 
 // Endpoint to create a new candidate
 app.post('/create-candidate', async (req, res) => {
