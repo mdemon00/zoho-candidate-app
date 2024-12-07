@@ -169,6 +169,94 @@ async function createZohoCandidate(candidateData) {
   }
 }
 
+// Function to download the photo from Zoho Recruit
+async function downloadCandidatePhotoFromZoho(candidateId) {
+  const url = `https://recruit.zoho.com/recruit/v2/Candidates/${candidateId}/photo`;
+
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+  };
+
+  try {
+    // Send the photo download request to Zoho Recruit
+    const photoResponse = await fetch(url, {
+      method: 'GET',
+      headers: headers,
+    });
+
+    if (!photoResponse.ok) {
+      const errorData = await photoResponse.json();
+      console.error('Error downloading photo:', errorData);
+      throw new Error(`Photo download failed: ${errorData.message}`);
+    }
+
+    // Log the response headers and check content type
+    const contentType = photoResponse.headers.get('Content-Type');
+    console.log('Content-Type:', contentType);  // Log content type for debugging
+    console.log('Content-Length:', photoResponse.headers.get('Content-Length')); // Log response size
+
+    // Ensure the response is an image
+    if (!contentType.startsWith('image/')) {
+      throw new Error('The downloaded file is not an image.');
+    }
+
+    // Convert the response to a Blob (image data)
+    const photoBlob = await photoResponse.blob();
+    console.log('Downloaded photo size:', photoBlob.size);  // Log the photo size
+
+    // Ensure the Blob is not empty
+    if (photoBlob.size === 0) {
+      throw new Error('Downloaded photo is empty.');
+    }
+
+    return photoBlob;
+  } catch (error) {
+    console.error('Error in downloadCandidatePhotoFromZoho:', error.message);
+    throw error;
+  }
+}
+
+app.get('/download-photo', async (req, res) => {
+  const { candidateId } = req.query;  // Candidate ID from query params
+
+  if (!candidateId) {
+    return res.status(400).json({ error: 'Candidate ID is required.' });
+  }
+
+  try {
+    const photoBlob = await downloadCandidatePhotoFromZoho(candidateId);
+
+    // Ensure the Content-Type is set correctly without charset
+    const contentType = 'image/jpeg';  // Adjust based on the actual image type
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'attachment; filename="candidate_photo.jpeg"');  // Modify if necessary
+
+    // Check the photo size before sending
+    console.log('Sending photo of size:', photoBlob.size);
+
+    // Set the proper content length
+    res.setHeader('Content-Length', photoBlob.size);  // Add Content-Length header explicitly
+
+    // Send the photo as a stream
+    const stream = photoBlob.stream();  // Create a readable stream from the Blob
+    stream.pipe(res);  // Pipe the stream to the response
+
+  } catch (error) {
+    console.error('Error in /download-photo:', error.message);
+    res.status(500).json({ error: 'Failed to download photo.', details: error.message });
+  }
+});
+
+
+
+
+
+
 // Function to upload the photo to Zoho Recruit
 async function uploadCandidatePhotoToZoho(candidateId, photoBlob) {
   const url = `https://recruit.zoho.com/recruit/v2/Candidates/${candidateId}/photo`;
