@@ -181,7 +181,7 @@ async function uploadCandidatePhotoToZoho(candidateId, photoBlob) {
 
   // Create a FormData object and append the file
   const formData = new FormData();
-  formData.append('file', photoBlob, 'candidate_photo.jpeg');  // Correct file format expected by Zoho
+  formData.append('file', photoBlob, 'candidate_photo.jpeg'); // Correct file format expected by Zoho
 
   const headers = {
     'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
@@ -191,8 +191,8 @@ async function uploadCandidatePhotoToZoho(candidateId, photoBlob) {
     // Send the photo upload request to Zoho Recruit
     const photoResponse = await fetch(url, {
       method: 'POST',
-      headers: headers,  // Note that we are not sending Content-Type because it's handled by FormData
-      body: formData,    // Send the FormData object directly as the body
+      headers: headers, // Pass headers without 'Content-Type'
+      body: formData,   // Send the FormData object directly as the body
     });
 
     if (!photoResponse.ok) {
