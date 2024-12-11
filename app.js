@@ -336,7 +336,6 @@ app.post('/create-candidate', async (req, res) => {
   }
 });
 
-// Define an endpoint to fetch candidate data (existing functionality)
 app.get('/fetch-candidate', async (req, res) => {
   const { email } = req.query;
 
@@ -351,6 +350,93 @@ app.get('/fetch-candidate', async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch candidate data.', details: error.message });
   }
 });
+
+// Define an endpoint to fetch applications related to a candidate
+app.get('/fetch-related-applications', async (req, res) => {
+  const { candidateId } = req.query;
+
+  if (!candidateId) {
+    return res.status(400).json({ error: 'Candidate ID query parameter is required.' });
+  }
+
+  try {
+    const applicationData = await getRelatedApplications(candidateId);
+    return res.json(applicationData);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch related applications.', details: error.message });
+  }
+});
+  
+// Function to fetch related applications for a candidate
+async function getRelatedApplications(candidateId) {
+  const moduleApiName = "Candidates"; // The module from which you're fetching related records
+  const relatedModule = "Applications"; // The related module (Applications)
+  const url = `https://recruit.zoho.com/recruit/v2/${moduleApiName}/${candidateId}/${relatedModule}`;
+
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error:', errorData.message);
+      if (response.status === 401 && errorData.code === 'INVALID_TOKEN') {
+        console.log('Token expired, refreshing...');
+        await refreshAccessToken();
+
+        const retryResponse = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        const retryData = await retryResponse.json();
+        console.log('Retry Response:', retryData);
+        return retryData;
+      }
+
+      throw new Error(errorData.message);
+    } else {
+      const data = await response.json();
+      console.log('Response:', data);
+      return data;
+    }
+  } catch (error) {
+    console.error('Error:', error.message);
+    throw error;
+  }
+}
+
+// Define an endpoint to fetch application data
+app.get('/fetch-application', async (req, res) => {
+  const { candidateId } = req.query;
+
+  if (!candidateId) {
+    return res.status(400).json({ error: 'Candidate ID query parameter is required.' });
+  }
+
+  try {
+    const applicationData = await getZohoApplicationData(candidateId);
+    return res.json(applicationData);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch application data.', details: error.message });
+  }
+});
+
 
 // Start the server
 app.listen(port, () => {
