@@ -437,6 +437,84 @@ app.get('/fetch-application', async (req, res) => {
   }
 });
 
+// Function to create a new job opening in Zoho Recruit
+async function createZohoJobOpening(jobOpeningData) {
+  const url = `https://recruit.zoho.com/recruit/v2/JobOpenings`;
+
+  // If there is no access token, refresh it
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ data: [jobOpeningData] }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error:', errorData.message);
+      if (response.status === 401 && errorData.code === 'INVALID_TOKEN') {
+        console.log('Token expired, refreshing...');
+
+        try {
+          // Refresh the token and retry the API request
+          await refreshAccessToken(); // Refresh token first
+
+          // Retry with the new token
+          const retryResponse = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ data: [jobOpeningData] }),
+          });
+
+          const retryData = await retryResponse.json();
+          console.log('Retry Response:', retryData);
+          return retryData;
+        } catch (refreshError) {
+          console.error('Error retrying request with new token:', refreshError.message);
+          throw refreshError;
+        }
+      }
+    } else {
+      const data = await response.json();
+      console.log('Response:', data);
+      return data;
+    }
+  } catch (error) {
+    console.error('Error:', error.message);
+    throw error;
+  }
+}
+
+
+// Endpoint to create a new job opening
+app.post('/create-job-opening', async (req, res) => {
+  const jobOpeningData = req.body;
+
+  if (!jobOpeningData || Object.keys(jobOpeningData).length === 0) {
+    return res.status(400).json({ error: 'Job opening data is required.' });
+  }
+
+  try {
+    const apiResponse = await createZohoJobOpening(jobOpeningData);
+    return res.json(apiResponse);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to create job opening.', details: error.message });
+  }
+});
+
 
 // Start the server
 app.listen(port, () => {
