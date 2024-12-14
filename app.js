@@ -590,6 +590,70 @@ async function getZohoJobOpeningData(computrabajoOi) {
   }
 }
 
+// Route to associate a candidate with a job opening
+app.put('/associate-candidate', async (req, res) => {
+  const { jobIds, candidateIds, comments } = req.body;
+
+  // Validate input
+  if (!jobIds || !candidateIds || jobIds.length === 0 || candidateIds.length === 0) {
+    return res.status(400).json({ error: 'Job IDs and Candidate IDs are required.' });
+  }
+
+  try {
+    const associationResponse = await associateCandidateWithJob(jobIds, candidateIds, comments);
+    return res.json(associationResponse);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to associate candidate with job opening.', details: error.message });
+  }
+});
+
+// Function to make the Zoho API request for association
+async function associateCandidateWithJob(jobIds, candidateIds, comments = 'Record successfully associated') {
+  const url = `https://recruit.zoho.com/recruit/v2/Candidates/actions/associate`;
+
+  // If there is no access token, refresh it
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  const payload = {
+    data: [
+      {
+        jobids: jobIds,
+        ids: candidateIds,
+        comments,
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error associating candidate:', errorData.message);
+      throw new Error(errorData.message);
+    }
+
+    const data = await response.json();
+    console.log('Candidate successfully associated:', data);
+    return data;
+  } catch (error) {
+    console.error('Error:', error.message);
+    throw error;
+  }
+}
+
 
 // Start the server
 app.listen(port, () => {
