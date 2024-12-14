@@ -515,6 +515,81 @@ app.post('/create-job-opening', async (req, res) => {
   }
 });
 
+app.get('/fetch-job-opening', async (req, res) => {
+  const { computrabajo_oi } = req.query;
+
+  if (!computrabajo_oi) {
+    return res.status(400).json({ error: 'computrabajo_oi query parameter is required.' });
+  }
+
+  try {
+    const jobOpeningData = await getZohoJobOpeningData(computrabajo_oi);
+    return res.json(jobOpeningData);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to fetch job opening data.', details: error.message });
+  }
+});
+
+
+// Function to make the Zoho API request for JobOpenings
+async function getZohoJobOpeningData(computrabajoOi) {
+  const url = `https://recruit.zoho.com/recruit/v2/JobOpenings/search?criteria=(computrabajo_oi:equals:${computrabajoOi})`;
+
+  // If there is no access token, refresh it
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error:', errorData.message);
+      if (response.status === 401 && errorData.code === 'INVALID_TOKEN') {
+        console.log('Token expired, refreshing...');
+
+        try {
+          // Refresh the token and retry the API request
+          await refreshAccessToken(); // Refresh token first
+
+          // Retry with the new token
+          const retryResponse = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          const retryData = await retryResponse.json();
+          console.log('Retry Response:', retryData);
+          return retryData;
+        } catch (refreshError) {
+          console.error('Error retrying request with new token:', refreshError.message);
+          throw refreshError;
+        }
+      }
+    } else {
+      const data = await response.json();
+      console.log('Response:', data);
+      return data;
+    }
+  } catch (error) {
+    console.error('Error:', error.message);
+    throw error;
+  }
+}
+
 
 // Start the server
 app.listen(port, () => {
