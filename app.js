@@ -715,6 +715,67 @@ async function updateZohoApplication(applicationId, updates) {
   }
 }
 
+// Backend Route: Update Candidate
+app.put('/update-candidate', async (req, res) => {
+  const { candidateId, updates } = req.body;
+
+  if (!candidateId || !updates) {
+    return res.status(400).json({ error: 'candidateId and updates are required.' });
+  }
+
+  try {
+    const response = await updateZohoCandidate(candidateId, updates);
+    return res.json(response);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to update candidate.', details: error.message });
+  }
+});
+
+// Function to send the update request to Zoho Recruit API
+async function updateZohoCandidate(candidateId, updates) {
+  const url = `https://recruit.zoho.com/recruit/v2/Candidates/${candidateId}`;
+
+  // Refresh access token if needed
+  if (!currentAccessToken) {
+    console.log('No access token found. Refreshing token...');
+    await refreshAccessToken();
+  }
+
+  const headers = {
+    'Authorization': `Zoho-oauthtoken ${currentAccessToken}`,
+    'Content-Type': 'application/json',
+  };
+
+  const payload = {
+    data: [
+      {
+        ...updates,
+      },
+    ],
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Error:', errorData.message);
+      throw new Error(`Zoho API Error: ${errorData.message}`);
+    }
+
+    const data = await response.json();
+    console.log('Candidate Updated:', data);
+    return data;
+  } catch (error) {
+    console.error('Error updating candidate:', error.message);
+    throw error;
+  }
+}
+
 // Start the server
 app.listen(port, () => {
   console.log(`Server is running on http://localhost:${port}`);
