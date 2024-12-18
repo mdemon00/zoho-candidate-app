@@ -50,8 +50,8 @@ async function refreshAccessToken() {
 }
 
 // Function to make the Zoho API request
-async function getZohoCandidateData(email) {
-  const url = `https://recruit.zoho.com/recruit/v2/Candidates/search?email=${email}`;
+async function getZohoCandidateData(computrabajo_candidate_id) {
+  const url = `https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=(computrabajo_candidate_id:equals:${computrabajo_candidate_id})`;
 
   // If there is no access token, refresh it
   if (!currentAccessToken) {
@@ -337,14 +337,14 @@ app.post('/create-candidate', async (req, res) => {
 });
 
 app.get('/fetch-candidate', async (req, res) => {
-  const { email } = req.query;
+  const { computrabajo_candidate_id } = req.query;
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email query parameter is required.' });
+  if (!computrabajo_candidate_id) {
+    return res.status(400).json({ error: 'computrabajo_candidate_id query parameter is required.' });
   }
 
   try {
-    const candidateData = await getZohoCandidateData(email);
+    const candidateData = await getZohoCandidateData(computrabajo_candidate_id);
     return res.json(candidateData);
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch candidate data.', details: error.message });
