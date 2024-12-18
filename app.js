@@ -50,8 +50,16 @@ async function refreshAccessToken() {
 }
 
 // Function to make the Zoho API request
-async function getZohoCandidateData(computrabajo_candidate_id) {
-  const url = `https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=(computrabajo_candidate_id:equals:${computrabajo_candidate_id})`;
+async function getZohoCandidateData({ computrabajo_candidate_id, computrabajo_email }) {
+  let url;
+
+  if (computrabajo_candidate_id) {
+    url = `https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=(computrabajo_candidate_id:equals:${computrabajo_candidate_id})`;
+  } else if (computrabajo_email) {
+    url = `https://recruit.zoho.com/recruit/v2/Candidates/search?criteria=(computrabajo_email:equals:${computrabajo_email})`;
+  } else {
+    throw new Error("Either computrabajo_candidate_id or computrabajo_email is required.");
+  }
 
   // If there is no access token, refresh it
   if (!currentAccessToken) {
@@ -73,14 +81,15 @@ async function getZohoCandidateData(computrabajo_candidate_id) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Error:', errorData.message);
+
+      // Handle token expiration and retry
       if (response.status === 401 && errorData.code === 'INVALID_TOKEN') {
         console.log('Token expired, refreshing...');
 
         try {
           // Refresh the token and retry the API request
-          await refreshAccessToken(); // Refresh token first
+          await refreshAccessToken();
 
-          // Retry with the new token
           const retryResponse = await fetch(url, {
             method: 'GET',
             headers: {
@@ -97,6 +106,8 @@ async function getZohoCandidateData(computrabajo_candidate_id) {
           throw refreshError;
         }
       }
+
+      throw new Error(`API request failed with status ${response.status}: ${errorData.message}`);
     } else {
       const data = await response.json();
       console.log('Response:', data);
@@ -107,6 +118,7 @@ async function getZohoCandidateData(computrabajo_candidate_id) {
     throw error;
   }
 }
+
 
 // Function to create a new candidate in Zoho Recruit
 async function createZohoCandidate(candidateData) {
@@ -337,19 +349,27 @@ app.post('/create-candidate', async (req, res) => {
 });
 
 app.get('/fetch-candidate', async (req, res) => {
-  const { computrabajo_candidate_id } = req.query;
+  const { computrabajo_candidate_id, computrabajo_email } = req.query;
 
-  if (!computrabajo_candidate_id) {
-    return res.status(400).json({ error: 'computrabajo_candidate_id query parameter is required.' });
+  if (!computrabajo_candidate_id && !computrabajo_email) {
+    return res.status(400).json({ error: 'computrabajo_candidate_id or computrabajo_email query parameter is required.' });
   }
 
   try {
-    const candidateData = await getZohoCandidateData(computrabajo_candidate_id);
+    let candidateData;
+
+    if (computrabajo_candidate_id) {
+      candidateData = await getZohoCandidateData({ computrabajo_candidate_id });
+    } else if (computrabajo_email) {
+      candidateData = await getZohoCandidateData({ computrabajo_email });
+    }
+
     return res.json(candidateData);
   } catch (error) {
     return res.status(500).json({ error: 'Failed to fetch candidate data.', details: error.message });
   }
 });
+
 
 // Define an endpoint to fetch applications related to a candidate
 app.get('/fetch-related-applications', async (req, res) => {
